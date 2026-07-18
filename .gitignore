@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcuserstate
+
+# Build and release artifacts
+dist/
+
+# Local secrets / signing files
+.env
+.env.local
+*.p12
+*.mobileprovision
+*.provisionprofile
