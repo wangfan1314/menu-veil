@@ -10,11 +10,31 @@ final class BarEverythingTests: XCTestCase {
         XCTAssertFalse(MenuBarItemSnapshot.isStatusItem(layer: 0, frame: CGRect(x: 0, y: 0, width: 32, height: 33)))
     }
 
-    func testOnlyAppleProcessesAreSystemFixed() {
-        XCTAssertTrue(MenuBarModel.isSystemFixed(bundleIdentifier: "com.apple.controlcenter"))
-        XCTAssertFalse(MenuBarModel.isSystemFixed(bundleIdentifier: "com.todesktop.230313mzl4w4u92"))
-        XCTAssertFalse(MenuBarModel.isSystemFixed(bundleIdentifier: "com.alibaba.DingTalkMac"))
-        XCTAssertFalse(MenuBarModel.isSystemFixed(bundleIdentifier: nil))
+    func testOnlyUnmovableAppleItemsAreSystemFixed() {
+        XCTAssertTrue(MenuBarModel.isSystemFixed(
+            bundleIdentifier: "com.apple.controlcenter",
+            displayName: "时钟"
+        ))
+        XCTAssertTrue(MenuBarModel.isSystemFixed(
+            bundleIdentifier: "com.apple.controlcenter",
+            displayName: "com.apple.menuextra.controlcenter"
+        ))
+        XCTAssertTrue(MenuBarModel.isSystemFixed(
+            bundleIdentifier: "com.apple.controlcenter",
+            displayName: "控制中心、录屏正被使用"
+        ))
+        XCTAssertFalse(MenuBarModel.isSystemFixed(
+            bundleIdentifier: "com.apple.controlcenter",
+            displayName: "Wi-Fi"
+        ))
+        XCTAssertFalse(MenuBarModel.isSystemFixed(
+            bundleIdentifier: "com.apple.controlcenter",
+            displayName: "电池"
+        ))
+        XCTAssertFalse(MenuBarModel.isSystemFixed(
+            bundleIdentifier: "com.todesktop.230313mzl4w4u92",
+            displayName: "Clock"
+        ))
     }
 
     func testWiFiIsSystemManaged() {

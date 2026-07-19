@@ -85,11 +85,19 @@ final class MenuBarModel: ObservableObject {
 
     func canToggle(_ item: MenuBarItemSnapshot) -> Bool {
         let bundleIdentifier = NSRunningApplication(processIdentifier: item.ownerPID)?.bundleIdentifier
-        return !item.isOnScreen || !Self.isSystemFixed(bundleIdentifier: bundleIdentifier)
+        return !item.isOnScreen || !Self.isSystemFixed(
+            bundleIdentifier: bundleIdentifier,
+            displayName: item.displayName
+        )
     }
 
-    nonisolated static func isSystemFixed(bundleIdentifier: String?) -> Bool {
-        bundleIdentifier?.hasPrefix("com.apple.") == true
+    nonisolated static func isSystemFixed(bundleIdentifier: String?, displayName: String) -> Bool {
+        guard bundleIdentifier?.hasPrefix("com.apple.") == true else { return false }
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ["时钟", "clock", "com.apple.menuextra.clock", "控制中心", "control center",
+                "com.apple.menuextra.controlcenter"].contains(name)
+            || name.hasPrefix("控制中心、")
+            || name.hasPrefix("control center,")
     }
 
     func storedHiddenKeys() -> Set<String>? {
