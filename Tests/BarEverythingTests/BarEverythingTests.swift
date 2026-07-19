@@ -42,4 +42,10 @@ final class BarEverythingTests: XCTestCase {
         XCTAssertTrue(item.needsRestoring(separatorFrame: separator, hiddenKeys: []))
         XCTAssertFalse(item.needsRestoring(separatorFrame: separator, hiddenKeys: [item.persistenceKey]))
     }
+
+    func testReorderDropsBeforeTargetInsteadOfInsideIt() {
+        let target = ControlTarget(id: 1, frame: CGRect(x: 500, y: 0, width: 20, height: 33))
+
+        XCTAssertLessThan(target.insertionXBefore, target.frame.minX)
+    }
 }

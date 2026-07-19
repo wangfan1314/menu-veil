@@ -42,6 +42,8 @@ struct MenuBarItemSnapshot: Identifiable, Hashable {
 struct ControlTarget {
     let id: CGWindowID
     let frame: CGRect
+
+    var insertionXBefore: CGFloat { frame.minX - 2 }
 }
 
 @MainActor
@@ -137,7 +139,7 @@ final class MenuBarModel: ObservableObject {
                 throw MoveError("没有找到可用的目标位置。")
             }
 
-            try await move(currentItem, toward: target, destinationX: target.frame.midX)
+            try await move(currentItem, toward: target, destinationX: target.insertionXBefore)
             try await Task.sleep(for: .milliseconds(180))
             statusBarController?.collapse()
             try await Task.sleep(for: .milliseconds(300))
@@ -309,12 +311,13 @@ final class MenuBarModel: ObservableObject {
         try await move(item, toward: target, destinationX: target.frame.midX)
     }
 
-    private func physicallyMove(_ item: MenuBarItemSnapshot, to end: CGPoint) async throws {
+    private func physicallyMove(_ item: MenuBarItemSnapshot, to requestedEnd: CGPoint) async throws {
         guard let source = CGEventSource(stateID: .hidSystemState) else {
             throw MoveError("无法创建输入事件。")
         }
 
         let start = CGPoint(x: item.frame.midX, y: item.frame.midY)
+        let end = CGPoint(x: requestedEnd.x, y: start.y)
         let originalCursor = CGEvent(source: nil)?.location
         CGDisplayHideCursor(CGMainDisplayID())
         defer {
@@ -357,6 +360,7 @@ final class MenuBarModel: ObservableObject {
             mouseCursorPosition: end,
             mouseButton: .left
         ) else { throw MoveError("无法结束拖动事件。") }
+        up.flags = .maskCommand
         up.post(tap: .cghidEventTap)
     }
 
@@ -403,6 +407,7 @@ final class StatusBarController: NSObject {
     private let toggleItem: NSStatusItem
     private let separatorItem: NSStatusItem
     private let popover = NSPopover()
+    private var outsideClickMonitor: Any?
     private weak var model: MenuBarModel?
 
     private var collapsedLength: CGFloat {
@@ -443,6 +448,12 @@ final class StatusBarController: NSObject {
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) }
         ))
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                self?.popover.performClose(nil)
+            }
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             Task { await self?.prepareControls() }
