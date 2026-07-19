@@ -30,10 +30,6 @@ struct MenuBarItemSnapshot: Identifiable, Hashable {
         layer == Int(CGWindowLevelForKey(.statusWindow)) && frame.height > 0 && frame.height <= 64
     }
 
-    static func canHide(frame: CGRect, toggleFrame: CGRect) -> Bool {
-        frame.maxX <= toggleFrame.minX + 1
-    }
-
     func needsRestoring(separatorFrame: CGRect, hiddenKeys: Set<String>) -> Bool {
         !hiddenKeys.contains(persistenceKey) && frame.maxX <= separatorFrame.minX + 1
     }
@@ -88,7 +84,12 @@ final class MenuBarModel: ObservableObject {
     }
 
     func canToggle(_ item: MenuBarItemSnapshot) -> Bool {
-        !item.isOnScreen || (!item.isSystemManagedWiFi && statusBarController?.canHide(item) != false)
+        let bundleIdentifier = NSRunningApplication(processIdentifier: item.ownerPID)?.bundleIdentifier
+        return !item.isOnScreen || !Self.isSystemFixed(bundleIdentifier: bundleIdentifier)
+    }
+
+    nonisolated static func isSystemFixed(bundleIdentifier: String?) -> Bool {
+        bundleIdentifier?.hasPrefix("com.apple.") == true
     }
 
     func storedHiddenKeys() -> Set<String>? {
@@ -470,11 +471,6 @@ final class StatusBarController: NSObject {
 
     func target(forShowing shouldShow: Bool) -> ControlTarget? {
         controlTarget(for: shouldShow ? toggleItem : separatorItem)
-    }
-
-    func canHide(_ item: MenuBarItemSnapshot) -> Bool {
-        guard let toggle = controlTarget(for: toggleItem) else { return true }
-        return MenuBarItemSnapshot.canHide(frame: item.frame, toggleFrame: toggle.frame)
     }
 
     private func prepareControls() async {

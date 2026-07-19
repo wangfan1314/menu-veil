@@ -10,10 +10,11 @@ final class BarEverythingTests: XCTestCase {
         XCTAssertFalse(MenuBarItemSnapshot.isStatusItem(layer: 0, frame: CGRect(x: 0, y: 0, width: 32, height: 33)))
     }
 
-    func testItemsRightOfToggleAreSystemFixed() {
-        let toggle = CGRect(x: 1505, y: 0, width: 32, height: 33)
-        XCTAssertTrue(MenuBarItemSnapshot.canHide(frame: CGRect(x: 1467, y: 0, width: 38, height: 33), toggleFrame: toggle))
-        XCTAssertFalse(MenuBarItemSnapshot.canHide(frame: CGRect(x: 1579, y: 0, width: 151, height: 33), toggleFrame: toggle))
+    func testOnlyAppleProcessesAreSystemFixed() {
+        XCTAssertTrue(MenuBarModel.isSystemFixed(bundleIdentifier: "com.apple.controlcenter"))
+        XCTAssertFalse(MenuBarModel.isSystemFixed(bundleIdentifier: "com.todesktop.230313mzl4w4u92"))
+        XCTAssertFalse(MenuBarModel.isSystemFixed(bundleIdentifier: "com.alibaba.DingTalkMac"))
+        XCTAssertFalse(MenuBarModel.isSystemFixed(bundleIdentifier: nil))
     }
 
     func testWiFiIsSystemManaged() {
