@@ -1,66 +1,81 @@
 <div align="center">
   <img src="Assets/MenuVeil.png" width="128" alt="MenuVeil icon">
   <h1>MenuVeil</h1>
-  <p>Manage menu bar icons hidden by the MacBook notch or limited screen space.</p>
+  <p><strong>See, hide, and organize every menu bar icon—even those hidden behind the MacBook notch.</strong></p>
   <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
+  <p><a href="https://github.com/wangfan1314/menu-veil/releases">Download</a> · <a href="https://github.com/wangfan1314/menu-veil/issues">Report an issue</a></p>
 </div>
 
-MenuVeil is a native macOS menu bar utility. It discovers menu bar items in the current session—including items pushed off-screen by the notch or limited space—and keeps less frequently used icons in an expandable hidden section.
+MenuVeil is a native macOS menu bar manager. Unlike divider-based tools that require you to find and `⌘`-drag each icon first, MenuVeil discovers the menu bar items in your current session—including icons pushed off-screen by the notch or limited space—and lets you manage their visibility and order directly.
 
-## Features
+## Highlights
 
-- Discover all menu bar items in the current session, not only the ones still visible on screen.
-- Manage icons in separate **Visible** and **Hidden** tabs.
-- View and restore hidden icons from the MenuVeil menu bar popover.
-- Save visibility preferences and reuse the previous layout immediately after relaunching.
-- Keep newly discovered, unconfigured icons visible by default.
-- Stay in the menu bar without occupying the Dock after the settings window is closed.
-- Run entirely on-device with no network service required.
+- **Discover everything**: List menu bar items in the current session, not only those still visible on screen.
+- **Visible and hidden tabs**: Manage both sections independently without turning off the macOS Menu Bar switch.
+- **Drag to reorder**: Drag the handle beside a row to update the real menu bar order.
+- **Quick access**: Open hidden items from the double-chevron menu bar popover; click anywhere outside to dismiss it.
+- **System item support**: Manage movable controls such as Wi-Fi, Bluetooth, Battery, Siri, and Spotlight.
+- **Persistent layout**: Reuse the previous layout immediately after relaunching; newly discovered icons stay visible by default.
+- **Dock-free operation**: Closing Settings keeps MenuVeil in the menu bar without occupying the Dock.
+- **On-device privacy**: No account, cloud service, or menu bar data upload.
 
 ## Screenshots
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="images/3.png" alt="Visible menu bar items"><br><strong>Visible</strong>: review current items and choose what to hide</td>
-    <td width="50%" align="center"><img src="images/4.png" alt="Hidden menu bar items"><br><strong>Hidden</strong>: review hidden items and restore them</td>
+    <td width="50%" align="center"><img src="images/3.png" alt="Visible menu bar items"><br><strong>Visible</strong>: hide or reorder current items</td>
+    <td width="50%" align="center"><img src="images/4.png" alt="Hidden menu bar items"><br><strong>Hidden</strong>: restore or reorder hidden items</td>
   </tr>
   <tr>
     <td width="50%" align="center"><img src="images/1.png" alt="MenuVeil menu bar control"><br>A compact menu bar control when everything is tucked away</td>
-    <td width="50%" align="center"><img src="images/2.png" alt="Hidden items popover"><br>Restore an icon quickly without opening the settings window</td>
+    <td width="50%" align="center"><img src="images/2.png" alt="Hidden items popover"><br>Restore an icon without reopening Settings</td>
   </tr>
 </table>
 
 ## Requirements
 
 - macOS 14 Sonoma or later.
-- Accessibility permission, used to move menu bar items.
+- The current prebuilt DMG supports Apple Silicon (M1 or later).
+- Accessibility permission is required to identify and move menu bar items owned by other apps.
 
 ## Installation
 
-1. Download `MenuVeil-<version>.dmg` from Releases.
+1. Download `MenuVeil-<version>.dmg` from [GitHub Releases](https://github.com/wangfan1314/menu-veil/releases).
 2. Open the DMG and drag MenuVeil into the Applications folder.
 3. If macOS blocks the first launch, open **System Settings → Privacy & Security**, find MenuVeil, and click **Open Anyway**.
 4. Follow the in-app prompt to enable MenuVeil under **System Settings → Privacy & Security → Accessibility**, then relaunch it.
 
-Current release builds use ad-hoc signing because the project does not yet use an Apple Developer ID. This does not bypass macOS security checks; users must explicitly approve the first launch.
+Current release builds use ad-hoc signing because the project does not yet use an Apple Developer ID. Manual approval on first launch is expected macOS behavior for an unnotarized app.
 
 ## Usage
 
-1. Open MenuVeil and click **Hide** for an item in the **Visible** tab.
-2. Click the double-chevron icon in the menu bar to view all hidden items.
-3. Click **Show** in the popover to restore an item to the menu bar.
-4. Use the **Settings** and **Quit** buttons at the bottom of the popover when needed.
+### Hide and restore
 
-MenuVeil remembers the layout. Future launches reuse the previous result directly, while icons from newly installed or newly discovered apps remain visible by default.
+Click **Hide** in the **Visible** tab. To restore an item, use the **Hidden** tab or open the double-chevron menu bar popover and click **Show**.
 
-> macOS does not allow some system-managed items to be moved. MenuVeil disables controls for the items it can identify as fixed to prevent ineffective actions.
+### Reorder icons
+
+Drag the three-line handle beside any movable item. MenuVeil updates the corresponding order in the real menu bar or hidden section.
+
+### Menu bar popover
+
+Click the MenuVeil double-chevron icon to browse hidden items. **Settings** and **Quit** are available at the bottom; clicking anywhere outside dismisses the popover.
+
+MenuVeil saves visibility and ordering preferences. Future launches reuse the previous layout directly without replaying a multi-step rearrangement animation.
+
+## System Items and Limitations
+
+- Movable system controls—including Wi-Fi, Bluetooth, Battery, Siri, and Spotlight—can be hidden and reordered.
+- The clock, main Control Center item, and privacy indicators for screen recording or microphone use remain fixed by macOS and are disabled in MenuVeil.
+- Menu bar behavior is an implementation detail of macOS and may require compatibility updates after major system releases.
+- If an icon cannot be moved, please include the macOS version, owning app, and reproduction steps in your issue.
 
 ## Build from Source
 
 Xcode 16 or another Swift 6-compatible development environment is required.
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/wangfan1314/menu-veil.git
 cd menu-veil
 swift test
 chmod +x scripts/build-app.sh scripts/build-dmg.sh
@@ -78,13 +93,13 @@ Without a Developer ID, run:
 scripts/build-dmg.sh
 ```
 
-The output is written to `dist/MenuVeil-0.1.0.dmg`. Override the version when needed:
+The default output is `dist/MenuVeil-0.1.0.dmg`. Override the version when needed:
 
 ```bash
 MENUVEIL_VERSION=0.2.0 scripts/build-dmg.sh
 ```
 
-Once you have an Apple Developer Program certificate and notarization credentials, create a signed and notarized build with:
+Once you have a Developer ID and notarization credentials, create a signed and notarized build with:
 
 ```bash
 MENUVEIL_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
@@ -94,8 +109,8 @@ scripts/build-dmg.sh
 
 ## Privacy
 
-MenuVeil uses macOS Accessibility and window information APIs to identify and move menu bar items. Preferences are stored locally in `UserDefaults`. The app does not upload menu bar information or make network requests.
+MenuVeil uses macOS Accessibility and window information APIs to identify and move menu bar items. Visibility preferences are stored locally in `UserDefaults`. The app does not upload menu bar information or make network requests.
 
 ## Contributing
 
-Issues and pull requests are welcome. When reporting a problem, please include the macOS version, MenuVeil version, the app that owns the affected icon, and clear reproduction steps.
+Issues and pull requests are welcome. When reporting a problem, include the macOS version, MenuVeil version, the app that owns the affected icon, and clear reproduction steps.

@@ -84,11 +84,16 @@ final class MenuBarModel: ObservableObject {
     }
 
     func canToggle(_ item: MenuBarItemSnapshot) -> Bool {
+        !item.isOnScreen || !isSystemFixed(item)
+    }
+
+    func canReorder(_ item: MenuBarItemSnapshot) -> Bool {
+        !isSystemFixed(item)
+    }
+
+    private func isSystemFixed(_ item: MenuBarItemSnapshot) -> Bool {
         let bundleIdentifier = NSRunningApplication(processIdentifier: item.ownerPID)?.bundleIdentifier
-        return !item.isOnScreen || !Self.isSystemFixed(
-            bundleIdentifier: bundleIdentifier,
-            displayName: item.displayName
-        )
+        return Self.isSystemFixed(bundleIdentifier: bundleIdentifier, displayName: item.displayName)
     }
 
     nonisolated static func isSystemFixed(bundleIdentifier: String?, displayName: String) -> Bool {
@@ -159,6 +164,61 @@ final class MenuBarModel: ObservableObject {
                 throw MoveError("移动没有生效，请再试一次。")
             }
             setPersistentlyHidden(item, hidden: !shouldShow)
+        } catch {
+            statusBarController?.collapse()
+            message = error.localizedDescription
+        }
+    }
+
+    func reorder(_ item: MenuBarItemSnapshot, before nextItem: MenuBarItemSnapshot?) async {
+        guard hasAccessibilityPermission else {
+            message = "请先授予辅助功能权限，然后再试。"
+            requestAccessibilityPermission()
+            return
+        }
+        guard canReorder(item) else {
+            message = "“\(item.displayName)”由系统固定，无法调整顺序。"
+            return
+        }
+
+        isMoving = true
+        defer { isMoving = false }
+
+        do {
+            statusBarController?.expandForMove()
+            try await Task.sleep(for: .milliseconds(70))
+            refresh()
+
+            let currentItem = items.first { $0.id == item.id }
+                ?? items.first { $0.persistenceKey == item.persistenceKey }
+                ?? item
+            let target: ControlTarget
+            if let nextItem {
+                guard let currentNext = items.first(where: { $0.id == nextItem.id })
+                    ?? items.first(where: { $0.persistenceKey == nextItem.persistenceKey }) else {
+                    throw MoveError("目标图标已经消失，请刷新后重试。")
+                }
+                target = ControlTarget(id: currentNext.id, frame: currentNext.frame)
+            } else if let sectionEnd = statusBarController?.target(forShowing: item.isOnScreen) {
+                target = sectionEnd
+            } else {
+                throw MoveError("没有找到该分区的末尾位置。")
+            }
+
+            try await move(currentItem, toward: target, destinationX: target.insertionXBefore)
+            try await Task.sleep(for: .milliseconds(180))
+            statusBarController?.collapse()
+            try await Task.sleep(for: .milliseconds(220))
+            refresh()
+
+            if let nextItem,
+               let moved = items.first(where: { $0.id == item.id })
+                    ?? items.first(where: { $0.persistenceKey == item.persistenceKey }),
+               let next = items.first(where: { $0.id == nextItem.id })
+                    ?? items.first(where: { $0.persistenceKey == nextItem.persistenceKey }),
+               moved.frame.minX >= next.frame.minX {
+                throw MoveError("顺序调整没有生效，请再试一次。")
+            }
         } catch {
             statusBarController?.collapse()
             message = error.localizedDescription
@@ -732,10 +792,19 @@ struct ContentView: View {
             .padding(.horizontal)
             .padding(.top, 12)
 
-            List(filteredItems) { item in
-                ItemRow(item: item, isMoving: model.isMoving, canToggle: model.canToggle(item)) {
-                    Task { await model.setVisible(!item.isOnScreen, item: item) }
+            List {
+                ForEach(filteredItems) { item in
+                    ItemRow(
+                        item: item,
+                        isMoving: model.isMoving,
+                        canToggle: model.canToggle(item),
+                        canReorder: model.canReorder(item)
+                    ) {
+                        Task { await model.setVisible(!item.isOnScreen, item: item) }
+                    }
+                    .moveDisabled(!model.canReorder(item))
                 }
+                .onMove(perform: moveItems)
             }
             .listStyle(.inset)
 
@@ -747,6 +816,19 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 680, minHeight: 520)
+    }
+
+    private func moveItems(from source: IndexSet, to destination: Int) {
+        guard source.count == 1, let sourceIndex = source.first else { return }
+        let currentItems = filteredItems
+        let item = currentItems[sourceIndex]
+        guard model.canReorder(item) else { return }
+
+        var reorderedItems = currentItems
+        reorderedItems.move(fromOffsets: source, toOffset: destination)
+        guard let newIndex = reorderedItems.firstIndex(of: item) else { return }
+        let nextItem = reorderedItems.indices.contains(newIndex + 1) ? reorderedItems[newIndex + 1] : nil
+        Task { await model.reorder(item, before: nextItem) }
     }
 
     private var header: some View {
@@ -776,10 +858,14 @@ private struct ItemRow: View {
     let item: MenuBarItemSnapshot
     let isMoving: Bool
     let canToggle: Bool
+    let canReorder: Bool
     let action: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(canReorder ? .secondary : .tertiary)
+                .help(canReorder ? "拖动调整菜单栏顺序" : "该项目由系统固定")
             appIcon
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.displayName)
