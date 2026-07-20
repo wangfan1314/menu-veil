@@ -16,6 +16,7 @@ MenuVeil is a native macOS menu bar manager. Unlike divider-based tools that req
 - **Quick access**: Open hidden items from the double-chevron menu bar popover; click anywhere outside to dismiss it.
 - **System item support**: Manage movable controls such as Wi-Fi, Bluetooth, Battery, Siri, and Spotlight.
 - **Persistent layout**: Reuse the previous layout immediately after relaunching; newly discovered icons stay visible by default.
+- **Multi-display aware**: Ignore per-display menu bar replicas created by macOS and refresh automatically when displays change.
 - **Dock-free operation**: Closing Settings keeps MenuVeil in the menu bar without occupying the Dock.
 - **On-device privacy**: No account, cloud service, or menu bar data upload.
 

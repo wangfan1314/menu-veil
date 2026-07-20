@@ -42,6 +42,15 @@ struct ControlTarget {
     var insertionXBefore: CGFloat { frame.minX - 2 }
 }
 
+struct MenuBarGeometry: Equatable {
+    let minY: CGFloat
+    let height: CGFloat
+
+    func contains(_ frame: CGRect) -> Bool {
+        abs(frame.minY - minY) <= 1 && abs(frame.height - height) <= 1
+    }
+}
+
 @MainActor
 final class MenuBarModel: ObservableObject {
     static let shared = MenuBarModel()
@@ -52,6 +61,7 @@ final class MenuBarModel: ObservableObject {
     @Published var message: String?
     weak var statusBarController: StatusBarController?
     private var excludedItemIDs = Set<CGWindowID>()
+    private var preferredMenuBarGeometry: MenuBarGeometry?
 
     var visibleCount: Int { items.count(where: \.isOnScreen) }
     var hiddenCount: Int { items.count - visibleCount }
@@ -68,6 +78,9 @@ final class MenuBarModel: ObservableObject {
         hasAccessibilityPermission = AXIsProcessTrusted()
         let rawWindows = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[CFString: Any]] ?? []
         var snapshots = rawWindows.compactMap(Self.snapshot).filter { !excludedItemIDs.contains($0.id) }
+        if let preferredMenuBarGeometry {
+            snapshots = snapshots.filter { preferredMenuBarGeometry.contains($0.frame) }
+        }
         if hasAccessibilityPermission {
             snapshots = Self.attachSourceApplications(to: snapshots)
         }
@@ -80,6 +93,14 @@ final class MenuBarModel: ObservableObject {
 
     func excludeControls(_ ids: Set<CGWindowID>) {
         excludedItemIDs = ids
+        refresh()
+    }
+
+    func preferMenuBar(containing controlFrame: CGRect) {
+        preferredMenuBarGeometry = MenuBarGeometry(
+            minY: controlFrame.minY,
+            height: controlFrame.height
+        )
         refresh()
     }
 
@@ -233,6 +254,7 @@ final class MenuBarModel: ObservableObject {
             let frame = CGRect(dictionaryRepresentation: bounds),
             let ownerPID = dictionary[kCGWindowOwnerPID] as? pid_t,
             ownerPID != getpid(),
+            !isMenuVeilControlTitle(dictionary[kCGWindowName] as? String ?? ""),
             MenuBarItemSnapshot.isStatusItem(layer: layer, frame: frame)
         else {
             return nil
@@ -246,6 +268,10 @@ final class MenuBarModel: ObservableObject {
             frame: frame,
             isOnScreen: dictionary[kCGWindowIsOnscreen] as? Bool ?? false
         )
+    }
+
+    nonisolated static func isMenuVeilControlTitle(_ title: String) -> Bool {
+        ["MenuVeil.Toggle", "MenuVeil.Separator", "com.wangzhizhong.MenuVeil"].contains(title)
     }
 
     private static func attachSourceApplications(
@@ -477,7 +503,9 @@ final class StatusBarController: NSObject {
     private let separatorItem: NSStatusItem
     private let popover = NSPopover()
     private var outsideClickMonitor: Any?
+    private var screenChangeObserver: Any?
     private weak var model: MenuBarModel?
+    private var activeMenuBarGeometry: MenuBarGeometry?
 
     private var collapsedLength: CGFloat {
         let width = NSScreen.screens.map { $0.frame.width }.max() ?? 1728
@@ -523,6 +551,16 @@ final class StatusBarController: NSObject {
                 self?.popover.performClose(nil)
             }
         }
+        screenChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                await self?.prepareControls()
+            }
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             Task { await self?.prepareControls() }
@@ -544,13 +582,27 @@ final class StatusBarController: NSObject {
     private func prepareControls() async {
         guard let model else { return }
         try? await Task.sleep(for: .milliseconds(70))
+        let pointerDisplay = displayBoundsUnderPointer()
+        activeMenuBarGeometry = nil
+        if let toggle = controlTarget(for: toggleItem, in: pointerDisplay) {
+            activeMenuBarGeometry = MenuBarGeometry(
+                minY: toggle.frame.minY,
+                height: toggle.frame.height
+            )
+            model.preferMenuBar(containing: toggle.frame)
+        }
         model.refresh()
 
         guard
-            let firstVisible = model.items.filter(\.isOnScreen).min(by: { $0.frame.minX < $1.frame.minX }),
             let toggle = controlTarget(for: toggleItem),
             let separator = controlTarget(for: separatorItem)
         else {
+            collapse()
+            return
+        }
+        model.preferMenuBar(containing: toggle.frame)
+        guard let firstVisible = model.items.filter(\.isOnScreen)
+            .min(by: { $0.frame.minX < $1.frame.minX }) else {
             collapse()
             return
         }
@@ -636,17 +688,47 @@ final class StatusBarController: NSObject {
         }
     }
 
-    private func controlTarget(for item: NSStatusItem) -> ControlTarget? {
+    private func controlTarget(
+        for item: NSStatusItem,
+        in displayBounds: CGRect? = nil
+    ) -> ControlTarget? {
         let title = item === toggleItem ? "MenuVeil.Toggle" : "MenuVeil.Separator"
         guard let descriptions = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[CFString: Any]] else {
             return nil
         }
-        let titledWindow = descriptions.first(where: { ($0[kCGWindowName] as? String) == title })
+        let replicaTitle = "com.wangzhizhong.MenuVeil"
+        let expectedWidth = item === toggleItem
+            ? item.button?.window?.frame.width ?? 32
+            : item.length
+        let statusWindows = descriptions.filter { dictionary in
+            guard
+                (dictionary[kCGWindowLayer] as? Int) == Int(CGWindowLevelForKey(.statusWindow)),
+                let bounds = dictionary[kCGWindowBounds] as? NSDictionary,
+                let frame = CGRect(dictionaryRepresentation: bounds)
+            else { return false }
+            if let displayBounds, !frame.intersects(displayBounds) { return false }
+            if let activeMenuBarGeometry, !activeMenuBarGeometry.contains(frame) { return false }
+            return true
+        }
+        let titledWindow = statusWindows
+            .filter {
+                let windowTitle = $0[kCGWindowName] as? String ?? ""
+                return windowTitle == title || windowTitle == replicaTitle
+            }
+            .min { lhs, rhs in
+                func widthDistance(_ dictionary: [CFString: Any]) -> CGFloat {
+                    guard
+                        let bounds = dictionary[kCGWindowBounds] as? NSDictionary,
+                        let frame = CGRect(dictionaryRepresentation: bounds)
+                    else { return .greatestFiniteMagnitude }
+                    return abs(frame.width - expectedWidth)
+                }
+                return widthDistance(lhs) < widthDistance(rhs)
+            }
         let geometryWindow: [CFString: Any]? = item.button?.window.flatMap { statusWindow in
             let expectedX = statusWindow.frame.minX
             let expectedWidth = statusWindow.frame.width
-            return descriptions
-                .filter { ($0[kCGWindowLayer] as? Int) == Int(CGWindowLevelForKey(.statusWindow)) }
+            return statusWindows
                 .min { lhs, rhs in
                     func distance(_ dictionary: [CFString: Any]) -> CGFloat {
                         guard
@@ -669,6 +751,7 @@ final class StatusBarController: NSObject {
 
     @objc private func togglePopover() {
         guard let button = toggleItem.button else { return }
+        activateMenuBarUnderPointer()
         if popover.isShown {
             popover.performClose(nil)
         } else {
@@ -676,7 +759,42 @@ final class StatusBarController: NSObject {
             let count = model?.hiddenCount ?? 0
             popover.contentSize = NSSize(width: 330, height: min(480, CGFloat(120 + count * 48)))
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(120))
+                guard let self, self.popover.isShown else { return }
+                self.model?.refresh()
+                let refreshedCount = self.model?.hiddenCount ?? 0
+                self.popover.contentSize = NSSize(
+                    width: 330,
+                    height: min(480, CGFloat(120 + refreshedCount * 48))
+                )
+            }
         }
+    }
+
+    private func activateMenuBarUnderPointer() {
+        guard
+            let model,
+            let displayBounds = displayBoundsUnderPointer()
+        else { return }
+        // Clear the previous geometry before looking for another display's replica.
+        activeMenuBarGeometry = nil
+        guard let toggle = controlTarget(for: toggleItem, in: displayBounds) else { return }
+        activeMenuBarGeometry = MenuBarGeometry(
+            minY: toggle.frame.minY,
+            height: toggle.frame.height
+        )
+        model.preferMenuBar(containing: toggle.frame)
+    }
+
+    private func displayBoundsUnderPointer() -> CGRect? {
+        let location = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(location) }) else {
+            return nil
+        }
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        guard let number = screen.deviceDescription[key] as? NSNumber else { return nil }
+        return CGDisplayBounds(CGDirectDisplayID(number.uint32Value))
     }
 
     private func openSettings() {

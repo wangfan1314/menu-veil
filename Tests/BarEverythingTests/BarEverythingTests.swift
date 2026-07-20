@@ -69,4 +69,19 @@ final class BarEverythingTests: XCTestCase {
 
         XCTAssertLessThan(target.insertionXBefore, target.frame.minX)
     }
+
+    func testMenuBarGeometryKeepsOnlyOneDisplaysStatusWindows() {
+        let primary = MenuBarGeometry(minY: 0, height: 33)
+
+        XCTAssertTrue(primary.contains(CGRect(x: 1200, y: 0, width: 32, height: 33)))
+        XCTAssertTrue(primary.contains(CGRect(x: -3000, y: 0, width: 32, height: 33)))
+        XCTAssertFalse(primary.contains(CGRect(x: 3200, y: -498, width: 32, height: 30)))
+    }
+
+    func testReplicatedMenuVeilControlsAreExcludedByTitle() {
+        XCTAssertTrue(MenuBarModel.isMenuVeilControlTitle("MenuVeil.Toggle"))
+        XCTAssertTrue(MenuBarModel.isMenuVeilControlTitle("MenuVeil.Separator"))
+        XCTAssertTrue(MenuBarModel.isMenuVeilControlTitle("com.wangzhizhong.MenuVeil"))
+        XCTAssertFalse(MenuBarModel.isMenuVeilControlTitle("Bluetooth"))
+    }
 }
